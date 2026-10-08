@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bloom</title>
+<link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#efeaff; --panel:#f8f5ff; --ink:#2a1f5c; --muted:#6f65a0; --line:#2a1f5c22;
+  --coral:#ff6f91; --leaf:#6fc08a; --leaf2:#a9dfa0; --stem:#4f8a6b; --pot:#2a1f5c;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171233;--panel:#221b4a;--ink:#f1ecff;--muted:#a79fd6;--line:#f1ecff22;--stem:#7fd0a0;--pot:#f1ecff}}
+:root[data-theme="dark"]{--bg:#171233;--panel:#221b4a;--ink:#f1ecff;--muted:#a79fd6;--line:#f1ecff22;--stem:#7fd0a0;--pot:#f1ecff}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:400 1rem/1.5 Figtree,system-ui,sans-serif;transition:background .5s}
+:focus-visible{outline:3px solid var(--coral);outline-offset:3px;border-radius:10px}
+.app{min-height:100%;max-width:1060px;margin:auto;display:grid;grid-template-columns:1fr 1fr;gap:clamp(1rem,4vw,3rem);align-items:center;padding:clamp(1rem,4vw,2.5rem)}
+.stage{position:relative;background:var(--panel);border-radius:40px;border:1px solid var(--line);aspect-ratio:4/5;overflow:hidden;max-height:82vh;width:100%}
+canvas{width:100%;height:100%;display:block;touch-action:pan-y}
+.tally{position:absolute;left:1rem;right:1rem;top:1rem;display:flex;gap:.3rem;flex-wrap:wrap;pointer-events:none}
+.tally i{width:16px;height:16px;border-radius:50% 50% 50% 0;background:var(--coral);transform:rotate(-45deg);animation:pop .5s backwards}
+@keyframes pop{from{transform:rotate(-45deg) scale(0)}}
+.panel{display:flex;flex-direction:column;gap:1.4rem}
+h1{font:400 clamp(2.6rem,7vw,4.5rem)/1 "Young Serif",Georgia,serif;margin:0;letter-spacing:-.01em}
+.say{color:var(--muted);margin:.4rem 0 0;min-height:3em;max-width:34ch}
+.time{font:400 clamp(4.5rem,15vw,8rem)/1 "Young Serif",Georgia,serif;font-variant-numeric:tabular-nums;margin:0;letter-spacing:-.02em}
+.time.done{color:var(--coral)}
+.presets{display:flex;gap:.5rem;flex-wrap:wrap}
+.presets button{font:500 1rem Figtree;border:1.5px solid var(--line);background:transparent;color:var(--ink);padding:.55rem 1.1rem;border-radius:99px;cursor:pointer;transition:all .2s}
+.presets button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.presets button:disabled{opacity:.4;cursor:not-allowed}
+.custom{display:flex;align-items:center;gap:.5rem;font-weight:500;color:var(--muted)}
+.custom input{width:5.2rem;font:500 1rem Figtree;padding:.5rem .8rem;border-radius:99px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink)}
+.custom input.active{border-color:var(--coral);box-shadow:0 0 0 3px #ff6f9133}
+.custom input:disabled{opacity:.4}
+input.name{font:500 1.05rem Figtree;width:100%;padding:.8rem 1.1rem;border-radius:16px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink)}
+input.name::placeholder{color:var(--muted)}
+.actions{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}
+.go{font:700 1.1rem Figtree;border:0;background:var(--coral);color:#2a1f5c;padding:1rem 2.2rem;border-radius:99px;cursor:pointer;box-shadow:0 6px 0 #c9486a;transition:transform .12s,box-shadow .12s}
+.go:active{transform:translateY(5px);box-shadow:0 1px 0 #c9486a}
+.ghost{font:500 1rem Figtree;border:0;background:none;color:var(--muted);cursor:pointer;padding:.6rem .8rem;border-radius:99px}
+.ghost:hover{color:var(--ink)}
+.tip{color:var(--muted);font-size:.9rem;margin:0}
+@media (max-width:760px){.app{grid-template-columns:1fr;align-content:start}.stage{aspect-ratio:1/1;max-height:46vh}.panel{gap:1rem}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <canvas id="cv" aria-label="A plant that grows as your timer runs. Move your pointer to blow wind."></canvas>
+    <div class="tally" id="tally" aria-label="Blooms grown today"></div>
+  </div>
+
+  <div class="panel">
+    <div>
+      <h1>Bloom</h1>
+      <p class="say" id="say">Pick a length, name what you're working on, and plant a seed.</p>
+    </div>
+    <p class="time" id="time" aria-live="off">05:00</p>
+    <div class="presets" id="presets" role="group" aria-label="Session length">
+      <button data-m="5" aria-pressed="true">5 min</button>
+      <button data-m="15" aria-pressed="false">15 min</button>
+      <button data-m="25" aria-pressed="false">25 min</button>
+      <button data-m="50" aria-pressed="false">50 min</button>
+      <label class="custom">Custom <input type="number" id="custom" min="1" max="180" inputmode="numeric" placeholder="min" aria-label="Custom minutes"></label>
+    </div>
+    <input class="name" id="name" placeholder="What are you growing? (optional)" maxlength="40" aria-label="Session name">
+    <div class="actions">
+      <button class="go" id="go">Plant seed</button>
+      <button class="ghost" id="reset">Start over</button>
+      <button class="ghost" id="theme" aria-label="Toggle dark mode">Dark</button>
+    </div>
+    <p class="tip">Space starts and pauses. Move over the plant to blow wind, tap to shake it.</p>
+  </div>
+</div>
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const cv=$('#cv'),c=cv.getContext('2d');
+let W,H,mins=5,total=5*60,elapsed=0,running=false,startAt=0,base=0,wind=0,windT=0,shake=0,done=false,petals=[];
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+/* storage (per-viewer, guarded) */
+const todayKey='bloom:'+new Date().toDateString();
+let blooms=0;try{blooms=+localStorage.getItem(todayKey)||0}catch(e){}
+function tally(){const t=$('#tally');t.innerHTML='';for(let i=0;i<blooms;i++){const e=document.createElement('i');e.style.animationDelay=(i*40)+'ms';t.appendChild(e)}}
+tally();
+
+/* canvas */
+function size(){const d=devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;cv.width=W*d;cv.height=H*d;c.setTransform(d,0,0,d,0,0)}
+addEventListener('resize',size);size();
+const hash=n=>{const s=Math.sin(n*127.1+311.7)*43758.5453;return s-Math.floor(s)};
+const ease=t=>t<0?0:t>1?1:1-Math.pow(1-t,3);
+let tNow=0;
+
+function branch(x,y,len,ang,d,id,p){
+  const maxD=7,birth=d/(maxD+1)*.82,g=ease((p-birth)/.16);
+  if(g<=0)return;
+  const sway=Math.sin(tNow*1.3+d*.8+id)*.025*d+wind*.09*d+shake*Math.sin(tNow*14+d)*.05;
+  const a=ang+sway,l=len*g;
+  const x2=x+Math.sin(a)*l,y2=y-Math.cos(a)*l;
+  c.strokeStyle=d>4?css('--leaf'):css('--stem');
+  c.lineWidth=Math.max(1.5,(maxD-d+1)*1.9*(W/420));c.lineCap='round';
+  c.beginPath();c.moveTo(x,y);c.lineTo(x2,y2);c.stroke();
+  if(d>=3&&d<maxD){ // leaves along branches
+    const lp=ease((p-birth-.05)/.1);
+    if(lp>0){c.fillStyle=id%2?css('--leaf'):'#a9dfa0';const s=lp*9*(W/420);
+      c.save();c.translate(x2,y2);c.rotate(a+(id%2?1:-1)*1.1);c.beginPath();c.ellipse(0,-s,s*.55,s*1.3,0,0,7);c.fill();c.restore()}
+  }
+  if(d===maxD){
+    const fl=ease((p-.9)/.1);
+    if(fl>0){flower(x2,y2,fl,id)}
+    return;
+  }
+  if(g<.98)return;
+  const spread=.42+hash(id)*.3,nl=len*(.72+hash(id+1)*.1);
+  branch(x2,y2,nl,a-spread,d+1,id*2+1,p);
+  branch(x2,y2,nl,a+spread*.8,d+1,id*2+2,p);
+}
+function flower(x,y,s,id){
+  const r=(7+hash(id)*4)*s*(W/420);
+  c.save();c.translate(x,y);c.rotate(tNow*.4+id);
+  c.fillStyle=css('--coral');
+  for(let i=0;i<5;i++){c.rotate(1.2566);c.beginPath();c.ellipse(0,-r,r*.6,r,0,0,7);c.fill()}
+  c.fillStyle='#ffd166';c.beginPath();c.arc(0,0,r*.45,0,7);c.fill();c.restore();
+}
+function frame(ts){
+  tNow=ts/1000;
+  if(running){elapsed=Math.min(total,base+(Date.now()-startAt)/1000);if(elapsed>=total)finish()}
+  const p=elapsed/total;
+  windT+=(wind-windT)*.08; shake*=.94;
+  c.clearRect(0,0,W,H);
+  // soil + pot
+  const px=W/2,gy=H*.86;
+  c.fillStyle=css('--pot');c.beginPath();
+  c.moveTo(px-W*.17,gy);c.lineTo(px+W*.17,gy);c.lineTo(px+W*.13,H*.96);c.quadraticCurveTo(px,H*.99,px-W*.13,H*.96);c.closePath();c.fill();
+  c.fillStyle=css('--coral');c.fillRect(px-W*.18,gy-5,W*.36,10);
+  if(p===0){ // seed
+    c.fillStyle=css('--stem');c.beginPath();c.ellipse(px,gy-10,7,5,0,0,7);c.fill();
+  }else branch(px,gy,H*.17,0,0,1,p);
+  // petals
+  petals=petals.filter(q=>q.y<H);
+  for(const q of petals){q.y+=q.vy;q.x+=q.vx+Math.sin(tNow*2+q.r)*.6+wind*1.5;q.a+=.05;
+    c.save();c.translate(q.x,q.y);c.rotate(q.a);c.fillStyle=css('--coral');c.globalAlpha=.8;c.beginPath();c.ellipse(0,0,4,7,0,0,7);c.fill();c.restore()}
+  c.globalAlpha=1;
+  // timer text
+  const left=Math.ceil(total-elapsed),m=String(Math.floor(left/60)).padStart(2,'0'),s=String(left%60).padStart(2,'0');
+  const el=$('#time');if(el.textContent!==`${m}:${s}`){el.textContent=`${m}:${s}`;document.title=running?`${m}:${s} · Bloom`:'Bloom'}
+  wind=wind; requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* interaction */
+function setWind(e){const r=cv.getBoundingClientRect();wind=((e.clientX-r.left)/r.width-.5)*2}
+cv.addEventListener('pointermove',setWind);
+cv.addEventListener('pointerleave',()=>wind=0);
+cv.addEventListener('pointerdown',e=>{setWind(e);shake=1;if(elapsed/total>.5)for(let i=0;i<8;i++)petals.push({x:W/2+(Math.random()-.5)*W*.5,y:H*.1+Math.random()*H*.3,vx:(Math.random()-.5),vy:1+Math.random(),a:0,r:Math.random()*6})});
+
+/* timer controls */
+const say=t=>$('#say').textContent=t;
+const lines=[[0,'Seed is in the soil.'],[.25,'Roots are taking hold.'],[.5,'Halfway. Leaves are opening.'],[.8,'Almost in bloom. Stay with it.']];
+let lastLine=-1;
+setInterval(()=>{if(!running)return;const p=elapsed/total;let k=0;lines.forEach(([t],i)=>{if(p>=t)k=i});if(k!==lastLine){lastLine=k;say((($('#name').value.trim())&&k===0?$('#name').value.trim()+': ':'')+lines[k][1])}},500);
+function start(){
+  if(done)reset();
+  running=true;startAt=Date.now();base=elapsed;$('#go').textContent='Pause';
+  document.querySelectorAll('#presets button,#custom').forEach(b=>b.disabled=true);
+  ac();
+}
+function pause(){running=false;base=elapsed;$('#go').textContent='Resume';say('Paused. Your plant is waiting.')}
+function reset(){running=false;done=false;total=mins*60;elapsed=0;base=0;lastLine=-1;$('#time').classList.remove('done');
+  $('#go').textContent='Plant seed';say('Pick a length, name what you\'re working on, and plant a seed.');
+  document.querySelectorAll('#presets button,#custom').forEach(b=>b.disabled=false);document.title='Bloom'}
+function finish(){
+  running=false;done=true;elapsed=total;$('#time').classList.add('done');$('#go').textContent='Plant another';
+  blooms++;try{localStorage.setItem(todayKey,blooms)}catch(e){}tally();
+  say('In full bloom. Take a real break, you earned it.');chime();
+  for(let i=0;i<30;i++)petals.push({x:Math.random()*W,y:-Math.random()*H*.5,vx:(Math.random()-.5),vy:1+Math.random()*1.5,a:0,r:Math.random()*6});
+  document.querySelectorAll('#presets button,#custom').forEach(b=>b.disabled=false);
+}
+$('#go').onclick=()=>running?pause():start();
+$('#reset').onclick=reset;
+document.querySelectorAll('#presets button').forEach(b=>b.onclick=()=>{
+  mins=+b.dataset.m;total=mins*60;elapsed=0;base=0;
+  document.querySelectorAll('#presets button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  $('#custom').value='';$('#custom').classList.remove('active');
+});
+$('#custom').addEventListener('input',e=>{
+  const v=Math.round(+e.target.value);
+  if(!(v>=1))return;
+  mins=Math.min(v,180);total=mins*60;elapsed=0;base=0;done=false;$('#time').classList.remove('done');
+  $('#go').textContent='Plant seed';
+  document.querySelectorAll('#presets button').forEach(x=>x.setAttribute('aria-pressed',false));
+  e.target.classList.add('active');
+});
+$('#custom').addEventListener('blur',e=>{if(+e.target.value>180)e.target.value=180});
+addEventListener('keydown',e=>{if(e.code==='Space'&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='BUTTON'){e.preventDefault();$('#go').click()}});
+$('#theme').onclick=()=>{const r=document.documentElement;
+  const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+  r.dataset.theme=dark?'light':'dark';$('#theme').textContent=dark?'Dark':'Light'};
+/* quick demo: double-click the time to preview growth */
+$('#time').addEventListener('dblclick',()=>{if(!running){total=20;elapsed=0;base=0;start()}});
+
+/* sound */
+let actx;function ac(){if(!actx)try{actx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}actx&&actx.resume()}
+function chime(){if(!actx)return;[523.25,659.25,783.99,1046.5].forEach((f,i)=>{
+  const o=actx.createOscillator(),g=actx.createGain(),n=actx.currentTime+i*.18;
+  o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(.2,n+.02);g.gain.exponentialRampToValueAtTime(.001,n+1.4);
+  o.connect(g);g.connect(actx.destination);o.start(n);o.stop(n+1.5)})}
+})();
+</script>
+</body>
+</html>
